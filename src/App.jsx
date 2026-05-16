@@ -405,10 +405,11 @@ export default function App() {
 
   async function fetchAll() {
     setLoading(true); setFetchError(null);
-    const [expRes, incRes, transRes] = await Promise.all([
+    const [expRes, incRes, transRes, pwRes] = await Promise.all([
       supabase.from("requests").select("*").eq("fiscal_year", fiscalYear).order("created_at", { ascending:false }),
       supabase.from("incomes").select("*").eq("fiscal_year", fiscalYear).order("date", { ascending:false }),
       supabase.from("transfers").select("*").eq("fiscal_year", fiscalYear).order("date", { ascending:false }),
+      supabase.from("settings").select("value").eq("key", "admin_password").single(),
     ]);
     if (expRes.error)   setFetchError("支出データ取得失敗: " + expRes.error.message);
     else setExpenses(expRes.data.map(toLocalExp));
@@ -416,7 +417,14 @@ export default function App() {
     else setIncomes(incRes.data.map(toLocalInc));
     if (transRes.error) setFetchError("送金データ取得失敗: " + transRes.error.message);
     else setTransfers(transRes.data.map(toLocalTrans));
+    if (!pwRes.error && pwRes.data) setAdminPassword(pwRes.data.value);
     setLoading(false);
+  }
+
+  // パスワードをSupabaseに保存
+  async function savePassword(newPw) {
+    await supabase.from("settings").upsert({ key:"admin_password", value:newPw });
+    setAdminPassword(newPw);
   }
 
   // 管理者認証
@@ -656,7 +664,7 @@ export default function App() {
   return (
     <div style={{ fontFamily:"'Noto Sans JP',sans-serif", background:"#F8F7F4", minHeight:"100vh" }}>
       {showAdminAuth && <AdminAuthModal onSuccess={onAdminSuccess} onClose={()=>setShowAdminAuth(false)} adminPassword={adminPassword} />}
-      {showChangePw  && <ChangePasswordModal adminPassword={adminPassword} onSave={pw=>setAdminPassword(pw)} onClose={()=>setShowChangePw(false)} />}
+      {showChangePw  && <ChangePasswordModal adminPassword={adminPassword} onSave={savePassword} onClose={()=>setShowChangePw(false)} />}
       {editExpItem   && <ExpenseEditModal item={editExpItem} isAdmin={isAdmin} onSave={f=>saveExpEdit(editExpItem.id,f)} onClose={()=>setEditExpItem(null)} />}
       {editIncItem   && <IncomeEditModal  item={editIncItem} onSave={f=>saveIncEdit(editIncItem.id,f)} onClose={()=>setEditIncItem(null)} />}
       {showTransfer  && <TransferModal accountBalance={accountBalance} onConfirm={doTransfer} onClose={()=>setShowTransfer(false)} />}
