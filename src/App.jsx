@@ -423,10 +423,13 @@ export default function App() {
 
   // パスワードをSupabaseに保存
   async function savePassword(newPw) {
-    const { error } = await supabase
+    alert("保存開始: " + newPw);
+    const { data, error } = await supabase
       .from("settings")
       .update({ value: newPw })
-      .eq("key", "admin_password");
+      .eq("key", "admin_password")
+      .select();
+    alert("結果: " + JSON.stringify({ data, error }));
     if (error) {
       alert("パスワード保存失敗: " + error.message);
       return;
