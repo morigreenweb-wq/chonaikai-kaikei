@@ -1216,6 +1216,53 @@ export default function App() {
         )}
 
         {/* ═══ ゴミ箱 ═══ */}
+        {tab==="trash"&&isAdmin&&(
+          <div>
+            <div style={{ background:"#FEE2E2", borderRadius:10, padding:"12px 16px", marginBottom:16, fontSize:13, color:"#991B1B" }}>🗑 ゴミ箱内のデータは復元できます。完全削除すると元に戻せません。</div>
+            <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+              {[["expense","💸 支出"],["income","💰 収入"]].map(([val,label])=>(
+                <button key={val} onClick={()=>setTrashTab(val)} style={{ padding:"6px 16px", borderRadius:20, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:trashTab===val?700:500, background:trashTab===val?"#991B1B":"#fff", color:trashTab===val?"#fff":"#4B5563", boxShadow:"0 1px 3px rgba(0,0,0,0.08)" }}>{label}</button>
+              ))}
+            </div>
+            {trashTab==="expense"&&(
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {trashedExpenses.length===0&&<div style={{ textAlign:"center", padding:40, color:"#9CA3AF" }}>削除済みの支出申請はありません</div>}
+                {trashedExpenses.map(r=>(
+                  <div key={r.id} style={{ ...card, borderLeft:"4px solid #9CA3AF", opacity:0.8 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between" }}>
+                      <div><div style={{ fontSize:11, color:"#9CA3AF" }}>{r.category}</div><div style={{ fontWeight:700, color:"#6B7280" }}>{r.title}</div><div style={{ fontSize:12, color:"#9CA3AF" }}>{r.requester}</div></div>
+                      <div style={{ fontSize:16, fontWeight:700, color:"#9CA3AF" }}>¥{r.amount.toLocaleString()}</div>
+                    </div>
+                    <div style={{ display:"flex", gap:8, marginTop:12 }}>
+                      <button onClick={()=>restoreExpense(r.id)} style={{ flex:2, padding:"8px 0", background:"#D1FAE5", color:"#065F46", border:"none", borderRadius:7, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>↩ 復元する</button>
+                      <button onClick={()=>hardDeleteExpense(r.id)} style={{ flex:1, padding:"8px 0", background:"#FEE2E2", color:"#991B1B", border:"none", borderRadius:7, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>完全削除</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {trashTab==="income"&&(
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {trashedIncomes.length===0&&<div style={{ textAlign:"center", padding:40, color:"#9CA3AF" }}>削除済みの収入はありません</div>}
+                {trashedIncomes.map(r=>(
+                  <div key={r.id} style={{ ...card, borderLeft:"4px solid #9CA3AF", opacity:0.8 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between" }}>
+                      <div><div style={{ fontSize:11, color:"#9CA3AF" }}>{r.category}</div>{r.note&&<div style={{ fontSize:13, color:"#6B7280" }}>{r.note}</div>}<div style={{ fontSize:12, color:"#9CA3AF" }}>{r.date}</div></div>
+                      <div style={{ fontSize:16, fontWeight:700, color:"#9CA3AF" }}>¥{r.amount.toLocaleString()}</div>
+                    </div>
+                    <div style={{ display:"flex", gap:8, marginTop:12 }}>
+                      <button onClick={()=>restoreIncome(r.id)} style={{ flex:2, padding:"8px 0", background:"#D1FAE5", color:"#065F46", border:"none", borderRadius:7, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>↩ 復元する</button>
+                      <button onClick={()=>hardDeleteIncome(r.id)} style={{ flex:1, padding:"8px 0", background:"#FEE2E2", color:"#991B1B", border:"none", borderRadius:7, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>完全削除</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ═══ 支出申請モーダル ═══ */}
       {showExpForm&&(
         <Modal onClose={()=>{setShowExpForm(false);setExpErrors({});}}>
           <div style={{ fontWeight:700, fontSize:18, color:"#1C3557", marginBottom:20 }}>支払い申請</div>
