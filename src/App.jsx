@@ -365,35 +365,52 @@ function IncomeEditModal({ item, onSave, onClose }) {
 function BudgetEditModal({ budgets, onSave, onClose, saving }) {
   const [form, setForm] = useState(() => {
     const init = {};
-    EXPENSE_CATEGORIES.forEach(cat => { init[cat] = budgets[cat] ? String(budgets[cat]) : ""; });
+    [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES].forEach(cat => {
+      init[cat] = budgets[cat] ? String(budgets[cat]) : "";
+    });
     return init;
   });
-  const total = Object.values(form).reduce((s,v) => s + (parseInt(v)||0), 0);
+  const incTotal = INCOME_CATEGORIES.reduce((s,c)=>s+(parseInt(form[c])||0),0);
+  const expTotal = EXPENSE_CATEGORIES.reduce((s,c)=>s+(parseInt(form[c])||0),0);
+
   return (
     <Modal onClose={onClose}>
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
         <span style={{ background:"#E8A020", color:"#fff", fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:12 }}>🔓 管理者</span>
         <div style={{ fontWeight:700, fontSize:17, color:"#1C3557" }}>📋 予算設定</div>
       </div>
-      <div style={{ fontSize:12, color:"#6B7280", marginBottom:16 }}>各支出カテゴリの予算額を入力してください（0または空欄は未設定）</div>
-      <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:"55vh", overflowY:"auto", paddingRight:4 }}>
-        {EXPENSE_CATEGORIES.map(cat => (
-          <div key={cat} style={{ display:"flex", alignItems:"center", gap:10 }}>
+      <div style={{ fontSize:12, color:"#6B7280", marginBottom:12 }}>各カテゴリの予算額を入力（0または空欄は未設定）</div>
+      <div style={{ maxHeight:"60vh", overflowY:"auto", paddingRight:4 }}>
+
+        {/* 収入 */}
+        <div style={{ fontSize:12, fontWeight:700, color:"#10B981", marginBottom:8, marginTop:4 }}>💰 収入カテゴリ</div>
+        {INCOME_CATEGORIES.map(cat=>(
+          <div key={cat} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
             <div style={{ flex:1, fontSize:13, color:"#374151" }}>{cat}</div>
-            <div style={{ width:140 }}>
-              <input
-                type="number" placeholder="0" value={form[cat]}
-                onChange={e => setForm(p=>({...p,[cat]:e.target.value}))}
-                style={{ width:"100%", padding:"7px 10px", border:"1.5px solid #E5E7EB", borderRadius:7, fontSize:13, outline:"none", boxSizing:"border-box", fontFamily:"inherit", textAlign:"right" }}
-              />
-            </div>
+            <input type="number" placeholder="0" value={form[cat]}
+              onChange={e=>setForm(p=>({...p,[cat]:e.target.value}))}
+              style={{ width:130, padding:"7px 10px", border:"1.5px solid #E5E7EB", borderRadius:7, fontSize:13, outline:"none", boxSizing:"border-box", fontFamily:"inherit", textAlign:"right" }} />
           </div>
         ))}
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#10B981", fontWeight:700, padding:"6px 0", borderTop:"1px solid #E5E7EB", marginBottom:16 }}>
+          <span>収入予算合計</span><span>¥{incTotal.toLocaleString()}</span>
+        </div>
+
+        {/* 支出 */}
+        <div style={{ fontSize:12, fontWeight:700, color:"#3B82F6", marginBottom:8 }}>💸 支出カテゴリ</div>
+        {EXPENSE_CATEGORIES.map(cat=>(
+          <div key={cat} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+            <div style={{ flex:1, fontSize:13, color:"#374151" }}>{cat}</div>
+            <input type="number" placeholder="0" value={form[cat]}
+              onChange={e=>setForm(p=>({...p,[cat]:e.target.value}))}
+              style={{ width:130, padding:"7px 10px", border:"1.5px solid #E5E7EB", borderRadius:7, fontSize:13, outline:"none", boxSizing:"border-box", fontFamily:"inherit", textAlign:"right" }} />
+          </div>
+        ))}
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#3B82F6", fontWeight:700, padding:"6px 0", borderTop:"1px solid #E5E7EB" }}>
+          <span>支出予算合計</span><span>¥{expTotal.toLocaleString()}</span>
+        </div>
       </div>
-      <div style={{ marginTop:12, padding:"10px 12px", background:"#F0FFF4", borderRadius:8, fontSize:13, color:"#065F46", display:"flex", justifyContent:"space-between" }}>
-        <span>予算合計</span>
-        <span style={{ fontWeight:700 }}>¥{total.toLocaleString()}</span>
-      </div>
+
       <div style={{ display:"flex", gap:10, marginTop:16 }}>
         <button onClick={onClose} style={{ flex:1, padding:12, border:"1.5px solid #E5E7EB", borderRadius:8, background:"#fff", cursor:"pointer", fontFamily:"inherit", fontSize:14 }}>キャンセル</button>
         <button onClick={()=>onSave(form)} disabled={saving}
@@ -787,7 +804,7 @@ export default function App() {
       {/* タブ */}
       <div style={{ background:"#fff", borderBottom:"1.5px solid #E5E7EB" }}>
         <div style={{ display:"flex", maxWidth:820, margin:"0 auto", overflowX:"auto" }}>
-          {[["summary","📊 サマリー"],["expense","💸 支出"],["income","💰 収入"]].map(([val,label])=>(
+          {[["summary","📊 サマリー"],["expense","💸 支出"],["income","💰 収入"],["budget","📋 予算"]].map(([val,label])=>(
             <button key={val} onClick={()=>setTab(val)} style={{ position:"relative", padding:"13px 20px", border:"none", background:"none", cursor:"pointer", fontFamily:"inherit", fontSize:14, fontWeight:tab===val?700:400, color:tab===val?"#1C3557":"#6B7280", borderBottom:tab===val?"3px solid #1C3557":"3px solid transparent", whiteSpace:"nowrap" }}>
               {label}
               {val==="expense"&&pendingCount>0&&<span style={{ position:"absolute", top:8, right:4, background:"#EF4444", color:"#fff", fontSize:10, fontWeight:700, minWidth:16, height:16, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", padding:"0 3px" }}>{pendingCount}</span>}
@@ -840,10 +857,7 @@ export default function App() {
               })}
             </div>
             <div style={card}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:"#374151" }}>カテゴリ別支出（支払済）</div>
-                {isAdmin && <button onClick={()=>setShowBudgetEdit(true)} style={{ background:"#E8A020", color:"#fff", border:"none", borderRadius:6, padding:"4px 12px", fontSize:12, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }}>📋 予算設定</button>}
-              </div>
+              <div style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:12 }}>カテゴリ別支出（支払済）</div>
               {(()=>{
                 const cats = EXPENSE_CATEGORIES.map(cat => ({
                   cat,
@@ -1078,9 +1092,130 @@ export default function App() {
             )}
           </div>
         )}
-      </div>
 
-      {/* ═══ 支出申請モーダル ═══ */}
+        {/* ═══ 予算タブ ═══ */}
+        {tab==="budget" && (
+          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+
+            {/* 予算合計サマリー */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              {[
+                {
+                  label:"収入予算合計", icon:"💰", color:"#10B981",
+                  budget: INCOME_CATEGORIES.reduce((s,c)=>s+(budgets[c]||0),0),
+                  actual: totalIncome,
+                },
+                {
+                  label:"支出予算合計", icon:"💸", color:"#3B82F6",
+                  budget: EXPENSE_CATEGORIES.reduce((s,c)=>s+(budgets[c]||0),0),
+                  actual: totalExpPaid,
+                },
+              ].map(({label,icon,color,budget,actual})=>{
+                const hasBudget = budget > 0;
+                const pct = hasBudget ? Math.min((actual/budget*100),100) : 0;
+                const over = hasBudget && actual > budget;
+                return (
+                  <div key={label} style={{ ...card, borderTop:`3px solid ${color}` }}>
+                    <div style={{ fontSize:12, color:"#6B7280", marginBottom:4 }}>{icon} {label}</div>
+                    <div style={{ fontSize:20, fontWeight:700, color:"#1C3557" }}>¥{budget.toLocaleString()}</div>
+                    {hasBudget && (
+                      <>
+                        <div style={{ fontSize:11, color:"#9CA3AF", marginTop:4 }}>実績 ¥{actual.toLocaleString()}</div>
+                        <div style={{ background:"#F3F4F6", borderRadius:99, height:8, overflow:"hidden", marginTop:6 }}>
+                          <div style={{ width:`${pct.toFixed(1)}%`, background: over?"#EF4444":color, height:"100%", borderRadius:99 }} />
+                        </div>
+                        <div style={{ fontSize:11, color: over?"#EF4444":"#9CA3AF", marginTop:3, textAlign:"right" }}>
+                          {over ? `⚠ ¥${(actual-budget).toLocaleString()} 超過` : `残り ¥${(budget-actual).toLocaleString()}`}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 管理者：編集ボタン */}
+            {isAdmin && (
+              <button onClick={()=>setShowBudgetEdit(true)} style={{ background:"#E8A020", color:"#fff", border:"none", padding:"10px 0", borderRadius:8, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit", width:"100%" }}>
+                ✏ 予算を編集する
+              </button>
+            )}
+
+            {/* 収入カテゴリ別予算 */}
+            <div style={card}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:12 }}>💰 収入カテゴリ別</div>
+              {INCOME_CATEGORIES.map(cat=>{
+                const actual = activeIncomes.filter(r=>r.category===cat).reduce((s,r)=>s+r.amount,0);
+                const budget = budgets[cat]||0;
+                const hasBudget = budget>0;
+                const pct = hasBudget ? Math.min((actual/budget*100),100) : 0;
+                const over = hasBudget && actual>budget;
+                if (!hasBudget && actual===0) return null;
+                return (
+                  <div key={cat} style={{ marginBottom:14 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
+                      <span style={{ color:"#374151", fontWeight:500 }}>{cat}</span>
+                      <span style={{ fontWeight:700, color: over?"#EF4444":"#374151" }}>¥{actual.toLocaleString()}</span>
+                    </div>
+                    {hasBudget && (
+                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"#9CA3AF", marginBottom:4 }}>
+                        <span>予算 ¥{budget.toLocaleString()}</span>
+                        <span style={{ color: over?"#EF4444":"#10B981", fontWeight:600 }}>
+                          {over ? `⚠ ¥${(actual-budget).toLocaleString()} 超過` : `残り ¥${(budget-actual).toLocaleString()}`}
+                        </span>
+                      </div>
+                    )}
+                    <div style={{ background:"#F3F4F6", borderRadius:99, height:8, overflow:"hidden" }}>
+                      <div style={{ width: hasBudget?`${pct.toFixed(1)}%`:"100%", background: over?"#EF4444":"#10B981", height:"100%", borderRadius:99 }} />
+                    </div>
+                    {hasBudget && <div style={{ fontSize:11, color:"#9CA3AF", marginTop:2, textAlign:"right" }}>{pct.toFixed(0)}%達成</div>}
+                  </div>
+                );
+              })}
+              {INCOME_CATEGORIES.every(cat=>(budgets[cat]||0)===0 && activeIncomes.filter(r=>r.category===cat).reduce((s,r)=>s+r.amount,0)===0) && (
+                <div style={{ color:"#9CA3AF", fontSize:13, textAlign:"center", padding:"10px 0" }}>収入データまたは予算がありません</div>
+              )}
+            </div>
+
+            {/* 支出カテゴリ別予算 */}
+            <div style={card}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:12 }}>💸 支出カテゴリ別（支払済）</div>
+              {EXPENSE_CATEGORIES.map(cat=>{
+                const actual = activeExpenses.filter(r=>r.category===cat&&r.payment==="paid").reduce((s,r)=>s+r.amount,0);
+                const budget = budgets[cat]||0;
+                const hasBudget = budget>0;
+                const pct = hasBudget ? Math.min((actual/budget*100),100) : 0;
+                const over = hasBudget && actual>budget;
+                if (!hasBudget && actual===0) return null;
+                return (
+                  <div key={cat} style={{ marginBottom:14 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
+                      <span style={{ color:"#374151", fontWeight:500 }}>{cat}</span>
+                      <span style={{ fontWeight:700, color: over?"#EF4444":"#374151" }}>¥{actual.toLocaleString()}</span>
+                    </div>
+                    {hasBudget && (
+                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"#9CA3AF", marginBottom:4 }}>
+                        <span>予算 ¥{budget.toLocaleString()}</span>
+                        <span style={{ color: over?"#EF4444":"#10B981", fontWeight:600 }}>
+                          {over ? `⚠ ¥${(actual-budget).toLocaleString()} 超過` : `残り ¥${(budget-actual).toLocaleString()}`}
+                        </span>
+                      </div>
+                    )}
+                    <div style={{ background:"#F3F4F6", borderRadius:99, height:8, overflow:"hidden" }}>
+                      <div style={{ width: hasBudget?`${pct.toFixed(1)}%`:"100%", background: over?"#EF4444":"#3B82F6", height:"100%", borderRadius:99 }} />
+                    </div>
+                    {hasBudget && <div style={{ fontSize:11, color:"#9CA3AF", marginTop:2, textAlign:"right" }}>{pct.toFixed(0)}%使用</div>}
+                  </div>
+                );
+              })}
+              {EXPENSE_CATEGORIES.every(cat=>(budgets[cat]||0)===0 && activeExpenses.filter(r=>r.category===cat&&r.payment==="paid").reduce((s,r)=>s+r.amount,0)===0) && (
+                <div style={{ color:"#9CA3AF", fontSize:13, textAlign:"center", padding:"10px 0" }}>支出データまたは予算がありません</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ ゴミ箱 ═══ */}
       {showExpForm&&(
         <Modal onClose={()=>{setShowExpForm(false);setExpErrors({});}}>
           <div style={{ fontWeight:700, fontSize:18, color:"#1C3557", marginBottom:20 }}>支払い申請</div>
