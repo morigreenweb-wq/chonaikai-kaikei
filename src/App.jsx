@@ -361,6 +361,50 @@ function IncomeEditModal({ item, onSave, onClose }) {
   );
 }
 
+// ── 予算設定モーダル ────────────────────────────────
+function BudgetEditModal({ budgets, onSave, onClose, saving }) {
+  const [form, setForm] = useState(() => {
+    const init = {};
+    EXPENSE_CATEGORIES.forEach(cat => { init[cat] = budgets[cat] ? String(budgets[cat]) : ""; });
+    return init;
+  });
+  const total = Object.values(form).reduce((s,v) => s + (parseInt(v)||0), 0);
+  return (
+    <Modal onClose={onClose}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+        <span style={{ background:"#E8A020", color:"#fff", fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:12 }}>🔓 管理者</span>
+        <div style={{ fontWeight:700, fontSize:17, color:"#1C3557" }}>📋 予算設定</div>
+      </div>
+      <div style={{ fontSize:12, color:"#6B7280", marginBottom:16 }}>各支出カテゴリの予算額を入力してください（0または空欄は未設定）</div>
+      <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:"55vh", overflowY:"auto", paddingRight:4 }}>
+        {EXPENSE_CATEGORIES.map(cat => (
+          <div key={cat} style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ flex:1, fontSize:13, color:"#374151" }}>{cat}</div>
+            <div style={{ width:140 }}>
+              <input
+                type="number" placeholder="0" value={form[cat]}
+                onChange={e => setForm(p=>({...p,[cat]:e.target.value}))}
+                style={{ width:"100%", padding:"7px 10px", border:"1.5px solid #E5E7EB", borderRadius:7, fontSize:13, outline:"none", boxSizing:"border-box", fontFamily:"inherit", textAlign:"right" }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop:12, padding:"10px 12px", background:"#F0FFF4", borderRadius:8, fontSize:13, color:"#065F46", display:"flex", justifyContent:"space-between" }}>
+        <span>予算合計</span>
+        <span style={{ fontWeight:700 }}>¥{total.toLocaleString()}</span>
+      </div>
+      <div style={{ display:"flex", gap:10, marginTop:16 }}>
+        <button onClick={onClose} style={{ flex:1, padding:12, border:"1.5px solid #E5E7EB", borderRadius:8, background:"#fff", cursor:"pointer", fontFamily:"inherit", fontSize:14 }}>キャンセル</button>
+        <button onClick={()=>onSave(form)} disabled={saving}
+          style={{ flex:2, padding:12, background:saving?"#9CA3AF":"#1C3557", color:"#fff", border:"none", borderRadius:8, fontWeight:700, cursor:saving?"default":"pointer", fontFamily:"inherit", fontSize:14 }}>
+          {saving?"保存中…":"保存する"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ── メイン ───────────────────────────────────────────
 export default function App() {
   const [adminPassword, setAdminPassword] = useState(DEFAULT_ADMIN_PASSWORD);
@@ -380,6 +424,8 @@ export default function App() {
   const [expenses,  setExpenses]  = useState([]);
   const [incomes,   setIncomes]   = useState([]);
   const [transfers, setTransfers] = useState([]);
+  const [budgets,   setBudgets]   = useState({}); // { "[02] 公民館行事": 120000, ... }
+  const [showBudgetEdit, setShowBudgetEdit] = useState(false);
 
   const emptyExp = { category:EXPENSE_CATEGORIES[0], title:"", amount:"", requester:"", description:"" };
   const emptyInc = { category:INCOME_CATEGORIES[0], amount:"", date:today(), note:"", account:ACCOUNTS[0] };
@@ -405,19 +451,25 @@ export default function App() {
 
   async function fetchAll() {
     setLoading(true); setFetchError(null);
-    const [expRes, incRes, transRes, pwRes] = await Promise.all([
+    const [expRes, incRes, transRes, pwRes, budgetRes] = await Promise.all([
       supabase.from("requests").select("*").eq("fiscal_year", fiscalYear).order("created_at", { ascending:false }),
       supabase.from("incomes").select("*").eq("fiscal_year", fiscalYear).order("date", { ascending:false }),
       supabase.from("transfers").select("*").eq("fiscal_year", fiscalYear).order("date", { ascending:false }),
       supabase.from("settings").select("value").eq("key", "admin_password").single(),
+      supabase.from("budgets").select("*").eq("fiscal_year", fiscalYear),
     ]);
-    if (expRes.error)   setFetchError("支出データ取得失敗: " + expRes.error.message);
+    if (expRes.error)    setFetchError("支出データ取得失敗: " + expRes.error.message);
     else setExpenses(expRes.data.map(toLocalExp));
-    if (incRes.error)   setFetchError("収入データ取得失敗: " + incRes.error.message);
+    if (incRes.error)    setFetchError("収入データ取得失敗: " + incRes.error.message);
     else setIncomes(incRes.data.map(toLocalInc));
-    if (transRes.error) setFetchError("送金データ取得失敗: " + transRes.error.message);
+    if (transRes.error)  setFetchError("送金データ取得失敗: " + transRes.error.message);
     else setTransfers(transRes.data.map(toLocalTrans));
     if (!pwRes.error && pwRes.data) setAdminPassword(pwRes.data.value);
+    if (!budgetRes.error) {
+      const map = {};
+      budgetRes.data.forEach(b => { map[b.category] = b.amount; });
+      setBudgets(map);
+    }
     setLoading(false);
   }
 
@@ -426,8 +478,7 @@ export default function App() {
     const { error } = await supabase
       .from("settings")
       .update({ value: newPw })
-      .eq("key", "admin_password")
-      .select();
+      .eq("key", "admin_password");
     if (error) {
       alert("パスワード保存失敗: " + error.message);
       return;
@@ -643,6 +694,23 @@ export default function App() {
     setSaving(false);
   }
 
+  // ── 予算操作 ──
+  async function saveBudgets(newBudgets) {
+    setSaving(true);
+    const upsertData = Object.entries(newBudgets)
+      .filter(([, v]) => parseInt(v) > 0)
+      .map(([category, amount]) => ({ fiscal_year:fiscalYear, category, amount:parseInt(amount) }));
+    const { error } = await supabase.from("budgets").upsert(upsertData, { onConflict:"fiscal_year,category" });
+    if (error) alert("予算保存失敗: " + error.message);
+    else {
+      const map = {};
+      upsertData.forEach(b => { map[b.category] = b.amount; });
+      setBudgets(map);
+      setShowBudgetEdit(false);
+    }
+    setSaving(false);
+  }
+
   // CSV
   function exportCSV() {
     const rows=[
@@ -673,6 +741,7 @@ export default function App() {
     <div style={{ fontFamily:"'Noto Sans JP',sans-serif", background:"#F8F7F4", minHeight:"100vh" }}>
       {showAdminAuth && <AdminAuthModal onSuccess={onAdminSuccess} onClose={()=>setShowAdminAuth(false)} adminPassword={adminPassword} />}
       {showChangePw  && <ChangePasswordModal adminPassword={adminPassword} onSave={savePassword} onClose={()=>setShowChangePw(false)} />}
+      {showBudgetEdit && <BudgetEditModal budgets={budgets} onSave={saveBudgets} onClose={()=>setShowBudgetEdit(false)} saving={saving} />}
       {editExpItem   && <ExpenseEditModal item={editExpItem} isAdmin={isAdmin} onSave={f=>saveExpEdit(editExpItem.id,f)} onClose={()=>setEditExpItem(null)} />}
       {editIncItem   && <IncomeEditModal  item={editIncItem} onSave={f=>saveIncEdit(editIncItem.id,f)} onClose={()=>setEditIncItem(null)} />}
       {showTransfer  && <TransferModal accountBalance={accountBalance} onConfirm={doTransfer} onClose={()=>setShowTransfer(false)} />}
@@ -771,22 +840,49 @@ export default function App() {
               })}
             </div>
             <div style={card}>
-              <div style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:12 }}>カテゴリ別支出（支払済）</div>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:"#374151" }}>カテゴリ別支出（支払済）</div>
+                {isAdmin && <button onClick={()=>setShowBudgetEdit(true)} style={{ background:"#E8A020", color:"#fff", border:"none", borderRadius:6, padding:"4px 12px", fontSize:12, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }}>📋 予算設定</button>}
+              </div>
               {(()=>{
-                const cats=EXPENSE_CATEGORIES.map(cat=>({cat,total:activeExpenses.filter(r=>r.category===cat&&r.payment==="paid").reduce((s,r)=>s+r.amount,0)})).filter(x=>x.total>0);
-                const max=Math.max(...cats.map(x=>x.total),1);
-                return cats.length===0
-                  ? <div style={{ color:"#9CA3AF", fontSize:13 }}>支払済みの支出はありません</div>
-                  : cats.map(({cat,total})=>(
-                    <div key={cat} style={{ marginBottom:8 }}>
+                const cats = EXPENSE_CATEGORIES.map(cat => ({
+                  cat,
+                  total:   activeExpenses.filter(r=>r.category===cat&&r.payment==="paid").reduce((s,r)=>s+r.amount,0),
+                  budget:  budgets[cat] || 0,
+                })).filter(x => x.total>0 || x.budget>0);
+                if (cats.length===0) return <div style={{ color:"#9CA3AF", fontSize:13 }}>支払済みの支出はありません</div>;
+                return cats.map(({cat, total, budget})=>{
+                  const hasBudget = budget > 0;
+                  const pct       = hasBudget ? Math.min((total/budget*100), 100) : 0;
+                  const over      = hasBudget && total > budget;
+                  const remaining = budget - total;
+                  const barColor  = over ? "#EF4444" : hasBudget ? "#3B82F6" : "#3B82F6";
+                  const bgMax     = hasBudget ? budget : total;
+                  return (
+                    <div key={cat} style={{ marginBottom:14 }}>
                       <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
-                        <span>{cat}</span><span style={{ fontWeight:600 }}>¥{total.toLocaleString()}</span>
+                        <span style={{ color:"#374151", fontWeight:500 }}>{cat}</span>
+                        <span style={{ fontWeight:700, color: over?"#EF4444":"#374151" }}>¥{total.toLocaleString()}</span>
                       </div>
-                      <div style={{ background:"#F3F4F6", borderRadius:99, height:8 }}>
-                        <div style={{ width:`${(total/max*100).toFixed(1)}%`, background:"#3B82F6", height:"100%", borderRadius:99 }} />
+                      {hasBudget && (
+                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"#9CA3AF", marginBottom:4 }}>
+                          <span>予算 ¥{budget.toLocaleString()}</span>
+                          <span style={{ color: over?"#EF4444":"#10B981", fontWeight:600 }}>
+                            {over ? `⚠ ¥${Math.abs(remaining).toLocaleString()} 超過` : `残り ¥${remaining.toLocaleString()}`}
+                          </span>
+                        </div>
+                      )}
+                      <div style={{ background:"#F3F4F6", borderRadius:99, height:8, overflow:"hidden" }}>
+                        <div style={{ width: hasBudget ? `${pct.toFixed(1)}%` : "100%", background:barColor, height:"100%", borderRadius:99 }} />
                       </div>
+                      {hasBudget && (
+                        <div style={{ fontSize:11, color:"#9CA3AF", marginTop:2, textAlign:"right" }}>
+                          {pct.toFixed(0)}%使用
+                        </div>
+                      )}
                     </div>
-                  ));
+                  );
+                });
               })()}
             </div>
           </div>
