@@ -30,6 +30,7 @@ function toLocalExp(r) {
     appliedDate:r.applied_date||null, approvedDate:r.approved_date||null, paidDate:r.paid_date||null,
     approval:r.approval, payment:r.payment, account:r.account||null,
     rejectReason:r.reject_reason||"", adminNote:r.admin_note||"",
+    approvedBy:r.approved_by||"", approveComment:r.approve_comment||"",
     fiscalYear:r.fiscal_year||2026, deleted:r.deleted||false,
   };
 }
@@ -458,6 +459,10 @@ export default function App() {
   const [confirmDelete,    setConfirmDelete]    = useState(false);
   const [rejectReason,     setRejectReason]     = useState("");
   const [showRejectInput,  setShowRejectInput]  = useState(false);
+  const [showApproveInput, setShowApproveInput] = useState(false);
+  const [approvedBy,       setApprovedBy]       = useState("");
+  const [approveComment,   setApproveComment]   = useState("");
+  const [approveError,     setApproveError]     = useState("");
   const [showUnpaidConfirm,setShowUnpaidConfirm]= useState(false);
   const [confirmIncDelete, setConfirmIncDelete] = useState(null);
   const [editExpItem,      setEditExpItem]      = useState(null);
@@ -567,17 +572,18 @@ export default function App() {
     setSaving(false);
   }
 
-  async function updateApproval(id, val, reason="") {
+  async function updateApproval(id, val, reason="", approvedBy="", approveComment="") {
     setSaving(true);
-    const approvedDate = val==="approved" ? today() : null;
     const { error } = await supabase.from("requests").update({
       approval:val, reject_reason:reason,
       approved_date: val==="approved" ? today() : (expenses.find(r=>r.id===id)?.approvedDate||null),
+      approved_by: val==="approved" ? approvedBy : "",
+      approve_comment: val==="approved" ? approveComment : "",
     }).eq("id",id);
     if (error) alert("更新失敗: " + error.message);
     else {
-      setExpenses(prev=>prev.map(r=>r.id===id?{...r,approval:val,rejectReason:reason,approvedDate:val==="approved"?today():r.approvedDate}:r));
-      setDetail(d=>d?{...d,approval:val,rejectReason:reason,approvedDate:val==="approved"?today():d.approvedDate}:d);
+      setExpenses(prev=>prev.map(r=>r.id===id?{...r,approval:val,rejectReason:reason,approvedDate:val==="approved"?today():r.approvedDate,approvedBy:val==="approved"?approvedBy:"",approveComment:val==="approved"?approveComment:""}:r));
+      setDetail(d=>d?{...d,approval:val,rejectReason:reason,approvedDate:val==="approved"?today():d.approvedDate,approvedBy:val==="approved"?approvedBy:"",approveComment:val==="approved"?approveComment:""}:d);
       setShowRejectInput(false); setRejectReason("");
     }
     setSaving(false);
@@ -585,11 +591,11 @@ export default function App() {
 
   async function revertToPending(id) {
     setSaving(true);
-    const { error } = await supabase.from("requests").update({ approval:"pending", payment:"unpaid", approved_date:null, paid_date:null, account:null }).eq("id",id);
+    const { error } = await supabase.from("requests").update({ approval:"pending", payment:"unpaid", approved_date:null, paid_date:null, account:null, approved_by:"", approve_comment:"" }).eq("id",id);
     if (error) alert("差戻し失敗: " + error.message);
     else {
-      setExpenses(prev=>prev.map(r=>r.id===id?{...r,approval:"pending",payment:"unpaid",approvedDate:null,paidDate:null,account:null}:r));
-      setDetail(d=>d?{...d,approval:"pending",payment:"unpaid",approvedDate:null,paidDate:null,account:null}:d);
+      setExpenses(prev=>prev.map(r=>r.id===id?{...r,approval:"pending",payment:"unpaid",approvedDate:null,paidDate:null,account:null,approvedBy:"",approveComment:""}:r));
+      setDetail(d=>d?{...d,approval:"pending",payment:"unpaid",approvedDate:null,paidDate:null,account:null,approvedBy:"",approveComment:""}:d);
     }
     setSaving(false);
   }
@@ -745,7 +751,7 @@ export default function App() {
   }
 
   const card={ background:"#fff", borderRadius:12, padding:16, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" };
-  const closeDetail=()=>{setDetail(null);setConfirmDelete(false);setShowRejectInput(false);setRejectReason("");setShowUnpaidConfirm(false);};
+  const closeDetail=()=>{setDetail(null);setConfirmDelete(false);setShowRejectInput(false);setRejectReason("");setShowUnpaidConfirm(false);setShowApproveInput(false);setApprovedBy("");setApproveComment("");setApproveError("");};
 
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", fontFamily:"sans-serif", color:"#6B7280", flexDirection:"column", gap:12 }}>
@@ -927,7 +933,7 @@ export default function App() {
                   </div>
                   <div style={{ display:"flex", gap:10, marginTop:6, fontSize:11, color:"#9CA3AF", flexWrap:"wrap" }}>
                     {r.appliedDate&&<span>申請: {r.appliedDate}</span>}
-                    {r.approvedDate&&<span>承認: {r.approvedDate}</span>}
+                    {r.approvedDate&&<span>承認: {r.approvedDate}{r.approvedBy&&` (${r.approvedBy})`}</span>}
                     {r.paidDate&&<span>支払: {r.paidDate}</span>}
                   </div>
                   <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap" }}>
@@ -1322,8 +1328,10 @@ export default function App() {
           <div style={{ ...card, marginBottom:12, padding:12 }}>
             <DateRow label="📝 申請日" value={detail.appliedDate} />
             <DateRow label="✅ 承認日" value={detail.approvedDate} />
+            {detail.approvedBy&&<DateRow label="👤 承認者" value={detail.approvedBy} />}
             <DateRow label="💳 支払日" value={detail.paidDate} />
           </div>
+          {detail.approveComment&&<div style={{ background:"#D1FAE5", borderRadius:8, padding:"8px 12px", fontSize:13, color:"#065F46", marginBottom:12 }}>💬 <strong>承認コメント：</strong>{detail.approveComment}</div>}
           {detail.adminNote&&<div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:8, padding:"8px 12px", fontSize:13, color:"#92400E", marginBottom:12 }}>🗒 <strong>管理者メモ：</strong>{detail.adminNote}</div>}
           {detail.approval==="rejected"&&detail.rejectReason&&<div style={{ background:"#FEE2E2", borderRadius:8, padding:"8px 12px", fontSize:13, color:"#991B1B", marginBottom:12 }}><strong>却下理由：</strong>{detail.rejectReason}</div>}
           <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
@@ -1334,10 +1342,43 @@ export default function App() {
           {canApproveReject(detail,isAdmin)&&(
             <div style={{ marginBottom:12 }}>
               <Label>🏛 承認処理</Label>
-              <div style={{ display:"flex", gap:8, marginBottom:showRejectInput?8:0 }}>
-                {detail.approval!=="approved"&&<button onClick={()=>updateApproval(detail.id,"approved")} disabled={saving} style={{ flex:1, padding:"8px 0", borderRadius:7, border:"none", cursor:saving?"default":"pointer", background:"#D1FAE5", color:"#065F46", fontWeight:600, fontSize:13, fontFamily:"inherit" }}>✓ 承認</button>}
-                {detail.approval!=="rejected"&&<button onClick={()=>setShowRejectInput(v=>!v)} style={{ flex:1, padding:"8px 0", borderRadius:7, border:"none", cursor:"pointer", background:showRejectInput?"#FEE2E2":"#E5E7EB", color:showRejectInput?"#991B1B":"#374151", fontWeight:600, fontSize:13, fontFamily:"inherit" }}>✗ 却下</button>}
+              <div style={{ display:"flex", gap:8 }}>
+                {detail.approval!=="approved"&&(
+                  <button onClick={()=>{ setShowApproveInput(v=>!v); setShowRejectInput(false); }}
+                    style={{ flex:1, padding:"8px 0", borderRadius:7, border:"none", cursor:"pointer", background:showApproveInput?"#D1FAE5":"#E5E7EB", color:showApproveInput?"#065F46":"#374151", fontWeight:600, fontSize:13, fontFamily:"inherit" }}>✓ 承認</button>
+                )}
+                {detail.approval!=="rejected"&&(
+                  <button onClick={()=>{ setShowRejectInput(v=>!v); setShowApproveInput(false); }}
+                    style={{ flex:1, padding:"8px 0", borderRadius:7, border:"none", cursor:"pointer", background:showRejectInput?"#FEE2E2":"#E5E7EB", color:showRejectInput?"#991B1B":"#374151", fontWeight:600, fontSize:13, fontFamily:"inherit" }}>✗ 却下</button>
+                )}
               </div>
+
+              {/* 承認フォーム */}
+              {showApproveInput&&(
+                <div style={{ marginTop:10, background:"#F0FFF4", borderRadius:10, padding:14 }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:"#065F46", marginBottom:10 }}>承認内容を入力してください</div>
+                  <div style={{ marginBottom:8 }}>
+                    <Label>承認者名 <span style={{ color:"#EF4444" }}>*</span></Label>
+                    <InputField value={approvedBy} onChange={e=>{ setApprovedBy(e.target.value); setApproveError(""); }} placeholder="承認者の氏名を入力" error={approveError} />
+                  </div>
+                  <div style={{ marginBottom:10 }}>
+                    <Label>コメント（任意）</Label>
+                    <InputField value={approveComment} onChange={e=>setApproveComment(e.target.value)} placeholder="承認に関するコメント" />
+                  </div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button onClick={()=>{ setShowApproveInput(false); setApprovedBy(""); setApproveComment(""); setApproveError(""); }}
+                      style={{ flex:1, padding:"8px 0", borderRadius:7, border:"1.5px solid #E5E7EB", background:"#fff", cursor:"pointer", fontFamily:"inherit", fontSize:13 }}>キャンセル</button>
+                    <button onClick={()=>{
+                      if (!approvedBy.trim()) { setApproveError("承認者名を入力してください"); return; }
+                      updateApproval(detail.id,"approved","",approvedBy,approveComment);
+                      setShowApproveInput(false); setApprovedBy(""); setApproveComment(""); setApproveError("");
+                    }} disabled={saving}
+                      style={{ flex:2, padding:"8px 0", borderRadius:7, border:"none", background:"#10B981", color:"#fff", cursor:saving?"default":"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700 }}>承認を確定する</button>
+                  </div>
+                </div>
+              )}
+
+              {/* 却下フォーム */}
               {showRejectInput&&(
                 <div style={{ marginTop:8 }}>
                   <InputField value={rejectReason} onChange={e=>setRejectReason(e.target.value)} placeholder="却下理由（任意）" />
