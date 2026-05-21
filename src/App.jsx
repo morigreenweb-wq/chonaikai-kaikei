@@ -280,6 +280,7 @@ function ExpenseEditModal({ item, isAdmin, onSave, onClose }) {
     approval:item.approval, payment:item.payment,
     appliedDate:item.appliedDate||"", approvedDate:item.approvedDate||"", paidDate:item.paidDate||"",
     account:item.account||"", rejectReason:item.rejectReason||"", adminNote:item.adminNote||"",
+    approvedBy:item.approvedBy||"", approveComment:item.approveComment||"",
   });
   const f = field => e => setForm(p=>({...p,[field]:e.target.value}));
   return (
@@ -318,8 +319,10 @@ function ExpenseEditModal({ item, isAdmin, onSave, onClose }) {
                 ))}
               </div>
             </div>
+            <div><Label>👤 承認者名</Label><InputField value={form.approvedBy} onChange={f("approvedBy")} placeholder="承認者の氏名" /></div>
+            <div><Label>💬 承認コメント</Label><InputField value={form.approveComment} onChange={f("approveComment")} placeholder="承認コメント" /></div>
             <div><Label>💳 支払口座</Label><SelectField value={form.account} onChange={f("account")} options={ACCOUNTS} includeBlank /></div>
-            {form.approval==="rejected"&&<div><Label>却下理由</Label><InputField value={form.rejectReason} onChange={f("rejectReason")} placeholder="却下理由" /></div>}
+            <div><Label>却下理由</Label><InputField value={form.rejectReason} onChange={f("rejectReason")} placeholder="却下理由" /></div>
             <div><Label>🗒 管理者メモ</Label>
               <textarea value={form.adminNote} onChange={f("adminNote")} rows={2} placeholder="例：〇〇さんに確認済み"
                 style={{ width:"100%", padding:"10px 12px", border:"1.5px solid #FDE68A", borderRadius:8, fontSize:14, resize:"vertical", boxSizing:"border-box", fontFamily:"inherit", outline:"none", background:"#FFFBEB" }} />
@@ -633,6 +636,7 @@ export default function App() {
       approval:form.approval, payment:form.payment,
       applied_date:form.appliedDate||null, approved_date:form.approvedDate||null, paid_date:form.paidDate||null,
       account:form.account||null, reject_reason:form.rejectReason||"", admin_note:form.adminNote||"",
+      approved_by:form.approvedBy||"", approve_comment:form.approveComment||"",
     }).eq("id",id);
     if (error) alert("更新失敗: " + error.message);
     else {
@@ -737,10 +741,10 @@ export default function App() {
   // CSV
   function exportCSV() {
     const rows=[
-      ["種別","カテゴリ","件名/備考","金額","手数料","申請日","承認日","支払日","口座","申請者","承認","支払","却下理由","管理者メモ"],
-      ...activeIncomes.map(r=>["収入",r.category,r.note,r.amount,"",r.date,"","",r.account||"","会計","-","-","",""]),
-      ...activeExpenses.map(r=>["支出",r.category,r.title,r.amount,"",r.appliedDate||"",r.approvedDate||"",r.paidDate||"",r.account||"未設定",r.requester,STATUS_LABELS.approval[r.approval],STATUS_LABELS.payment[r.payment],r.rejectReason||"",r.adminNote||""]),
-      ...transfers.map(t=>["送金","",`${t.from}→${t.to}`,t.amount,t.fee||0,t.date,"","","","","-","-","",""]),
+      ["種別","カテゴリ","件名/備考","金額","手数料","申請日","承認日","承認者","承認コメント","支払日","口座","申請者","承認","支払","却下理由","管理者メモ"],
+      ...activeIncomes.map(r=>["収入",r.category,r.note,r.amount,"",r.date,"","","","",r.account||"","会計","-","-","",""]),
+      ...activeExpenses.map(r=>["支出",r.category,r.title,r.amount,"",r.appliedDate||"",r.approvedDate||"",r.approvedBy||"",r.approveComment||"",r.paidDate||"",r.account||"未設定",r.requester,STATUS_LABELS.approval[r.approval],STATUS_LABELS.payment[r.payment],r.rejectReason||"",r.adminNote||""]),
+      ...transfers.map(t=>["送金","",`${t.from}→${t.to}`,t.amount,t.fee||0,t.date,"","","","","","","-","-","",""]),
     ];
     const bom="\uFEFF";
     const csv=rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
@@ -922,7 +926,7 @@ export default function App() {
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
               {filteredExp.length===0&&<div style={{ textAlign:"center", padding:40, color:"#9CA3AF" }}>該当する申請がありません</div>}
               {filteredExp.map(r=>(
-                <div key={r.id} onClick={()=>{setDetail(r);setConfirmDelete(false);setShowRejectInput(false);setRejectReason("");setShowUnpaidConfirm(false);}} style={{ ...card, cursor:"pointer", borderLeft:r.approval==="pending"?"4px solid #F0AD00":r.approval==="rejected"?"4px solid #EF4444":"4px solid #10B981" }}>
+                <div key={r.id} onClick={()=>{setDetail(r);setConfirmDelete(false);setShowRejectInput(false);setRejectReason("");setShowUnpaidConfirm(false);setShowApproveInput(false);setApprovedBy("");setApproveComment("");setApproveError("");}} style={{ ...card, cursor:"pointer", borderLeft:r.approval==="pending"?"4px solid #F0AD00":r.approval==="rejected"?"4px solid #EF4444":"4px solid #10B981" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                     <div>
                       <div style={{ fontSize:11, color:"#6B7280", marginBottom:2 }}>{r.category}</div>
