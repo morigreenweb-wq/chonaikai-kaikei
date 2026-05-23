@@ -289,7 +289,61 @@ function TransferModal({ accountBalance, onConfirm, onClose }) {
   );
 }
 
-// ── 支出編集モーダル ────────────────────────────────
+// ── 口座間送金編集モーダル ──────────────────────────
+function TransferEditModal({ item, accountBalance, onSave, onClose }) {
+  const [form, setForm] = useState({
+    from: item.from, to: item.to,
+    amount: String(item.amount), fee: item.fee ? String(item.fee) : "", date: item.date,
+  });
+  const f = field => e => setForm(p=>({...p,[field]:e.target.value}));
+  const fromBal  = (accountBalance[form.from]||0) + item.amount + (item.fee||0); // 元の送金を戻した仮残高
+  const totalOut = (parseInt(form.amount)||0) + (parseInt(form.fee)||0);
+  const insufficient = totalOut > fromBal;
+  const invalid = !form.amount || parseInt(form.amount)<=0 || form.from===form.to;
+  return (
+    <Modal onClose={onClose}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:20 }}>
+        <span style={{ background:"#E8A020", color:"#fff", fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:12 }}>🔓 管理者</span>
+        <div style={{ fontWeight:700, fontSize:17, color:"#1C3557" }}>🔄 送金内容を編集</div>
+      </div>
+      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+        <div><Label>送金元</Label>
+          <select value={form.from} onChange={f("from")}
+            style={{ width:"100%", padding:"10px 12px", border:"1.5px solid #E5E7EB", borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box", fontFamily:"inherit", background:"#fff" }}>
+            {ACCOUNTS.map(o=><option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div><Label>送金先</Label>
+          <select value={form.to} onChange={f("to")}
+            style={{ width:"100%", padding:"10px 12px", border:"1.5px solid #E5E7EB", borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box", fontFamily:"inherit", background:"#fff" }}>
+            {ACCOUNTS.map(o=><option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        {form.from===form.to && <div style={{ fontSize:12, color:"#EF4444" }}>⚠ 送金元と送金先が同じです</div>}
+        <div><Label>送金額（円）</Label>
+          <input type="number" placeholder="0" value={form.amount} onChange={f("amount")}
+            style={{ width:"100%", padding:"10px 12px", border:"1.5px solid #E5E7EB", borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
+        </div>
+        <div><Label>振込手数料（円）※ある場合のみ</Label>
+          <input type="number" placeholder="0" value={form.fee} onChange={f("fee")}
+            style={{ width:"100%", padding:"10px 12px", border:"1.5px solid #E5E7EB", borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
+        </div>
+        <div><Label>日付</Label>
+          <input type="date" value={form.date} onChange={f("date")}
+            style={{ width:"100%", padding:"10px 12px", border:"1.5px solid #E5E7EB", borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
+        </div>
+        {insufficient && <div style={{ fontSize:12, color:"#EF4444" }}>⚠ 残高不足の可能性があります</div>}
+      </div>
+      <div style={{ display:"flex", gap:10, marginTop:20 }}>
+        <button onClick={onClose} style={{ flex:1, padding:12, border:"1.5px solid #E5E7EB", borderRadius:8, background:"#fff", cursor:"pointer", fontFamily:"inherit", fontSize:14 }}>キャンセル</button>
+        <button onClick={()=>onSave({...form, amount:parseInt(form.amount), fee:parseInt(form.fee)||0})} disabled={invalid}
+          style={{ flex:2, padding:12, background:invalid?"#9CA3AF":"#E8A020", color:"#fff", border:"none", borderRadius:8, fontWeight:700, cursor:invalid?"default":"pointer", fontFamily:"inherit", fontSize:14 }}>保存する</button>
+      </div>
+    </Modal>
+  );
+}
+
+
 function ExpenseEditModal({ item, isAdmin, onSave, onClose }) {
   const [form, setForm] = useState({
     category:item.category, title:item.title, amount:String(item.amount),
@@ -487,6 +541,8 @@ export default function App() {
   const [confirmIncDelete, setConfirmIncDelete] = useState(null);
   const [editExpItem,      setEditExpItem]      = useState(null);
   const [editIncItem,      setEditIncItem]      = useState(null);
+  const [editTransferItem, setEditTransferItem] = useState(null);
+  const [confirmDeleteTransfer, setConfirmDeleteTransfer] = useState(null);
 
   // ── データ取得 ──
   useEffect(() => { fetchAll(); }, [fiscalYear]);
@@ -738,6 +794,24 @@ export default function App() {
     setSaving(false);
   }
 
+  async function saveTransferEdit(id, form) {
+    setSaving(true);
+    const { error } = await supabase.from("transfers").update({
+      from_account:form.from, to_account:form.to, amount:form.amount, fee:form.fee||0, date:form.date,
+    }).eq("id",id);
+    if (error) alert("更新失敗: " + error.message);
+    else { setTransfers(prev=>prev.map(t=>t.id===id?{...t,...form}:t)); setEditTransferItem(null); }
+    setSaving(false);
+  }
+
+  async function deleteTransfer(id) {
+    setSaving(true);
+    const { error } = await supabase.from("transfers").delete().eq("id",id);
+    if (error) alert("削除失敗: " + error.message);
+    else { setTransfers(prev=>prev.filter(t=>t.id!==id)); setConfirmDeleteTransfer(null); }
+    setSaving(false);
+  }
+
   // ── 予算操作 ──
   async function saveBudgets(newBudgets) {
     setSaving(true);
@@ -789,6 +863,7 @@ export default function App() {
       {editExpItem   && <ExpenseEditModal item={editExpItem} isAdmin={isAdmin} onSave={f=>saveExpEdit(editExpItem.id,f)} onClose={()=>setEditExpItem(null)} />}
       {editIncItem   && <IncomeEditModal  item={editIncItem} onSave={f=>saveIncEdit(editIncItem.id,f)} onClose={()=>setEditIncItem(null)} />}
       {showTransfer  && <TransferModal accountBalance={accountBalance} onConfirm={doTransfer} onClose={()=>setShowTransfer(false)} />}
+      {editTransferItem && <TransferEditModal item={editTransferItem} accountBalance={accountBalance} onSave={f=>saveTransferEdit(editTransferItem.id,f)} onClose={()=>setEditTransferItem(null)} />}
       {payTarget     && <PayAccountModal expense={payTarget} accountBalance={accountBalance} onConfirm={confirmPayment} onClose={()=>setPayTarget(null)} />}
 
       {/* ヘッダー */}
@@ -950,7 +1025,16 @@ export default function App() {
                       <div style={{ fontWeight:700, fontSize:15, color:"#111", marginBottom:3 }}>{r.title}</div>
                       <div style={{ fontSize:12, color:"#9CA3AF" }}>{r.requester}</div>
                     </div>
-                    <div style={{ fontSize:18, fontWeight:700, color:"#1C3557" }}>¥{r.amount.toLocaleString()}</div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:18, fontWeight:700, color:"#1C3557" }}>
+                        ¥{(r.amount+(r.paymentFee||0)).toLocaleString()}
+                      </div>
+                      {r.paymentFee>0 && (
+                        <div style={{ fontSize:11, color:"#9CA3AF", marginTop:2 }}>
+                          申請額 ¥{r.amount.toLocaleString()} ＋ 手数料 ¥{r.paymentFee.toLocaleString()}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div style={{ display:"flex", gap:10, marginTop:6, fontSize:11, color:"#9CA3AF", flexWrap:"wrap" }}>
                     {r.appliedDate&&<span>申請: {r.appliedDate}</span>}
@@ -1055,16 +1139,36 @@ export default function App() {
               {transfers.length===0
                 ? <div style={{ color:"#9CA3AF", fontSize:13, textAlign:"center", padding:"20px 0" }}>送金履歴はありません</div>
                 : transfers.map(t=>(
-                  <div key={t.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px", background:"#F8F7F4", borderRadius:8, marginBottom:6 }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <span>{ACCOUNT_ICONS[t.from]}</span><span style={{ fontSize:13, fontWeight:600 }}>{t.from}</span>
-                      <span style={{ fontSize:12, color:"#9CA3AF" }}>→</span>
-                      <span>{ACCOUNT_ICONS[t.to]}</span><span style={{ fontSize:13, fontWeight:600 }}>{t.to}</span>
-                    </div>
-                    <div style={{ textAlign:"right" }}>
-                      <div style={{ fontSize:14, fontWeight:700, color:"#1C3557" }}>¥{t.amount.toLocaleString()}</div>
-                      {t.fee>0&&<div style={{ fontSize:11, color:"#EF4444" }}>手数料 ¥{t.fee.toLocaleString()}</div>}
-                      <div style={{ fontSize:11, color:"#9CA3AF" }}>{t.date}</div>
+                  <div key={t.id} style={{ padding:"10px 12px", background:"#F8F7F4", borderRadius:8, marginBottom:6 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <span>{ACCOUNT_ICONS[t.from]}</span>
+                        <span style={{ fontSize:13, fontWeight:600 }}>{t.from}</span>
+                        <span style={{ fontSize:12, color:"#9CA3AF" }}>→</span>
+                        <span>{ACCOUNT_ICONS[t.to]}</span>
+                        <span style={{ fontSize:13, fontWeight:600 }}>{t.to}</span>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <div style={{ textAlign:"right" }}>
+                          <div style={{ fontSize:14, fontWeight:700, color:"#1C3557" }}>¥{t.amount.toLocaleString()}</div>
+                          {t.fee>0&&<div style={{ fontSize:11, color:"#EF4444" }}>手数料 ¥{t.fee.toLocaleString()}</div>}
+                          <div style={{ fontSize:11, color:"#9CA3AF" }}>{t.date}</div>
+                        </div>
+                        {/* 編集・削除ボタン */}
+                        <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                          <button onClick={()=>setEditTransferItem(t)}
+                            style={{ background:"#FEF3C7", color:"#92400E", border:"none", borderRadius:6, padding:"4px 10px", fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>✏</button>
+                          {confirmDeleteTransfer===t.id ? (
+                            <div style={{ display:"flex", gap:4 }}>
+                              <button onClick={()=>setConfirmDeleteTransfer(null)} style={{ padding:"4px 6px", borderRadius:6, border:"1.5px solid #E5E7EB", background:"#fff", cursor:"pointer", fontSize:11, fontFamily:"inherit" }}>戻す</button>
+                              <button onClick={()=>deleteTransfer(t.id)} style={{ padding:"4px 6px", borderRadius:6, border:"none", background:"#991B1B", color:"#fff", cursor:"pointer", fontSize:11, fontFamily:"inherit", fontWeight:700 }}>削除</button>
+                            </div>
+                          ) : (
+                            <button onClick={()=>setConfirmDeleteTransfer(t.id)}
+                              style={{ background:"#FEE2E2", color:"#991B1B", border:"none", borderRadius:6, padding:"4px 10px", fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>削除</button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))
