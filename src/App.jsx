@@ -31,6 +31,7 @@ function toLocalExp(r) {
     approval:r.approval, payment:r.payment, account:r.account||null,
     rejectReason:r.reject_reason||"", adminNote:r.admin_note||"",
     approvedBy:r.approved_by||"", approveComment:r.approve_comment||"",
+    paymentFee:r.payment_fee||0,
     fiscalYear:r.fiscal_year||2026, deleted:r.deleted||false,
   };
 }
@@ -198,15 +199,18 @@ function ChangePasswordModal({ adminPassword, onSave, onClose }) {
 // ── 支払口座選択モーダル ────────────────────────────
 function PayAccountModal({ expense, accountBalance, onConfirm, onClose }) {
   const [selectedAccount, setSelectedAccount] = useState(ACCOUNTS[0]);
+  const [fee, setFee] = useState("");
+  const feeAmt = parseInt(fee)||0;
+  const totalOut = expense.amount + feeAmt;
   const bal = accountBalance[selectedAccount]||0;
-  const insufficient = bal < expense.amount;
+  const insufficient = bal < totalOut;
   return (
     <Modal onClose={onClose}>
       <div style={{ fontWeight:700, fontSize:17, color:"#1C3557", marginBottom:4 }}>💳 支払い口座を選択</div>
       <div style={{ fontSize:13, color:"#6B7280", marginBottom:16 }}>「{expense.title}」¥{expense.amount.toLocaleString()} の支払い口座</div>
       <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:16 }}>
         {ACCOUNTS.map(acct=>{
-          const b=accountBalance[acct]||0, ok=b>=expense.amount, selected=selectedAccount===acct;
+          const b=accountBalance[acct]||0, ok=b>=totalOut, selected=selectedAccount===acct;
           return (
             <div key={acct} onClick={()=>setSelectedAccount(acct)}
               style={{ padding:"12px 16px", borderRadius:10, border:`2px solid ${selected?ACCOUNT_COLORS[acct]:"#E5E7EB"}`, background:selected?`${ACCOUNT_COLORS[acct]}0D`:"#fff", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -222,10 +226,23 @@ function PayAccountModal({ expense, accountBalance, onConfirm, onClose }) {
           );
         })}
       </div>
+      {/* 手数料入力欄 */}
+      <div style={{ marginBottom:12 }}>
+        <Label>振込手数料（円）※ある場合のみ</Label>
+        <input type="number" placeholder="0（手数料なしの場合は空欄）" value={fee}
+          onChange={e=>setFee(e.target.value)}
+          style={{ width:"100%", padding:"10px 12px", border:"1.5px solid #E5E7EB", borderRadius:8, fontSize:14, outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} />
+      </div>
+      {/* 合計表示 */}
+      {feeAmt>0 && (
+        <div style={{ background:"#FFF3CD", borderRadius:8, padding:"8px 12px", fontSize:13, color:"#856404", marginBottom:12 }}>
+          口座から引かれる合計：¥{totalOut.toLocaleString()}（支払額 ¥{expense.amount.toLocaleString()} ＋ 手数料 ¥{feeAmt.toLocaleString()}）
+        </div>
+      )}
       {insufficient && <div style={{ background:"#FEE2E2", borderRadius:8, padding:"8px 12px", fontSize:13, color:"#991B1B", marginBottom:12 }}>⚠ 残高不足です。口座を変えるか、送金してから支払ってください。</div>}
       <div style={{ display:"flex", gap:10 }}>
         <button onClick={onClose} style={{ flex:1, padding:12, border:"1.5px solid #E5E7EB", borderRadius:8, background:"#fff", cursor:"pointer", fontFamily:"inherit", fontSize:14 }}>キャンセル</button>
-        <button onClick={()=>onConfirm(selectedAccount)} disabled={insufficient}
+        <button onClick={()=>onConfirm(selectedAccount, feeAmt)} disabled={insufficient}
           style={{ flex:2, padding:12, background:insufficient?"#9CA3AF":"#1C3557", color:"#fff", border:"none", borderRadius:8, fontWeight:700, cursor:insufficient?"default":"pointer", fontFamily:"inherit", fontSize:14 }}>
           この口座で支払い済みにする
         </button>
@@ -530,10 +547,10 @@ export default function App() {
   const trashCount      = trashedExpenses.length + trashedIncomes.length;
 
   const accountBalance = ACCOUNTS.reduce((acc, acct) => {
-    const inc     = activeIncomes.filter(r=>r.account===acct).reduce((s,r)=>s+r.amount,0);
-    const exp     = activeExpenses.filter(r=>r.account===acct&&r.payment==="paid").reduce((s,r)=>s+r.amount,0);
-    const transOut= transfers.filter(r=>r.from===acct).reduce((s,r)=>s+r.amount+(r.fee||0),0);
-    const transIn = transfers.filter(r=>r.to===acct).reduce((s,r)=>s+r.amount,0);
+    const inc      = activeIncomes.filter(r=>r.account===acct).reduce((s,r)=>s+r.amount,0);
+    const exp      = activeExpenses.filter(r=>r.account===acct&&r.payment==="paid").reduce((s,r)=>s+r.amount+(r.paymentFee||0),0);
+    const transOut = transfers.filter(r=>r.from===acct).reduce((s,r)=>s+r.amount+(r.fee||0),0);
+    const transIn  = transfers.filter(r=>r.to===acct).reduce((s,r)=>s+r.amount,0);
     acc[acct] = inc - exp - transOut + transIn;
     return acc;
   }, {});
@@ -603,14 +620,14 @@ export default function App() {
     setSaving(false);
   }
 
-  async function confirmPayment(account) {
+  async function confirmPayment(account, fee=0) {
     if (!payTarget) return;
     setSaving(true);
-    const { error } = await supabase.from("requests").update({ payment:"paid", paid_date:today(), account }).eq("id",payTarget.id);
+    const { error } = await supabase.from("requests").update({ payment:"paid", paid_date:today(), account, payment_fee:fee }).eq("id",payTarget.id);
     if (error) alert("更新失敗: " + error.message);
     else {
-      setExpenses(prev=>prev.map(r=>r.id===payTarget.id?{...r,payment:"paid",paidDate:today(),account}:r));
-      setDetail(d=>d&&d.id===payTarget.id?{...d,payment:"paid",paidDate:today(),account}:d);
+      setExpenses(prev=>prev.map(r=>r.id===payTarget.id?{...r,payment:"paid",paidDate:today(),account,paymentFee:fee}:r));
+      setDetail(d=>d&&d.id===payTarget.id?{...d,payment:"paid",paidDate:today(),account,paymentFee:fee}:d);
       setPayTarget(null);
     }
     setSaving(false);
@@ -741,10 +758,10 @@ export default function App() {
   // CSV
   function exportCSV() {
     const rows=[
-      ["種別","カテゴリ","件名/備考","金額","手数料","申請日","承認日","承認者","承認コメント","支払日","口座","申請者","承認","支払","却下理由","管理者メモ"],
-      ...activeIncomes.map(r=>["収入",r.category,r.note,r.amount,"",r.date,"","","","",r.account||"","会計","-","-","",""]),
-      ...activeExpenses.map(r=>["支出",r.category,r.title,r.amount,"",r.appliedDate||"",r.approvedDate||"",r.approvedBy||"",r.approveComment||"",r.paidDate||"",r.account||"未設定",r.requester,STATUS_LABELS.approval[r.approval],STATUS_LABELS.payment[r.payment],r.rejectReason||"",r.adminNote||""]),
-      ...transfers.map(t=>["送金","",`${t.from}→${t.to}`,t.amount,t.fee||0,t.date,"","","","","","","-","-","",""]),
+      ["種別","カテゴリ","件名/備考","金額","振込手数料","送金手数料","申請日","承認日","承認者","承認コメント","支払日","口座","申請者","承認","支払","却下理由","管理者メモ"],
+      ...activeIncomes.map(r=>["収入",r.category,r.note,r.amount,"","",r.date,"","","","",r.account||"","会計","-","-","",""]),
+      ...activeExpenses.map(r=>["支出",r.category,r.title,r.amount,r.paymentFee||0,"",r.appliedDate||"",r.approvedDate||"",r.approvedBy||"",r.approveComment||"",r.paidDate||"",r.account||"未設定",r.requester,STATUS_LABELS.approval[r.approval],STATUS_LABELS.payment[r.payment],r.rejectReason||"",r.adminNote||""]),
+      ...transfers.map(t=>["送金","",`${t.from}→${t.to}`,t.amount,"",t.fee||0,t.date,"","","","","","","-","-","",""]),
     ];
     const bom="\uFEFF";
     const csv=rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
@@ -1334,6 +1351,7 @@ export default function App() {
             <DateRow label="✅ 承認日" value={detail.approvedDate} />
             {detail.approvedBy&&<DateRow label="👤 承認者" value={detail.approvedBy} />}
             <DateRow label="💳 支払日" value={detail.paidDate} />
+            {detail.paymentFee>0&&<DateRow label="💸 振込手数料" value={`¥${detail.paymentFee.toLocaleString()}`} />}
           </div>
           {detail.approveComment&&<div style={{ background:"#D1FAE5", borderRadius:8, padding:"8px 12px", fontSize:13, color:"#065F46", marginBottom:12 }}>💬 <strong>承認コメント：</strong>{detail.approveComment}</div>}
           {detail.adminNote&&<div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:8, padding:"8px 12px", fontSize:13, color:"#92400E", marginBottom:12 }}>🗒 <strong>管理者メモ：</strong>{detail.adminNote}</div>}
